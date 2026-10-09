@@ -1,0 +1,6 @@
+pandas
+torch
+transformers
+bitsandbytes
+python-dotenv
+tqdm
