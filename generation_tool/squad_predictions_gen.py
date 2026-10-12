@@ -9,18 +9,21 @@ from datasets import load_dataset
 
 # 1. Caricamento ambiente e percorsi
 load_dotenv()
-token = os.environ.get("HUGGINGFACE_HUB_TOKEN")
+# caricamento del token di accesso a Hugging Face dal file .env 
+token = os.environ.get("HF_TOKEN")
 
 FOLDER_OUTPUT = Path("output_squad")
 FILE_OUTPUT = FOLDER_OUTPUT / "squad_predictions.csv"
 FOLDER_OUTPUT.mkdir(parents=True, exist_ok=True)
 
+# Definizione del modello da utilizzare
 MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct" 
 
 # 2. Rilevamento Hardware e Configurazione Quantizzazione
 print("Rilevamento hardware in corso...")
 quantization_config = None
 
+# Rilevamento della GPU disponibile e configurazione della quantizzazione se necessario
 if torch.cuda.is_available():
     device = "cuda"
     print("-> Utilizzo GPU NVIDIA (CUDA)")
@@ -98,7 +101,7 @@ def main():
 
     print(f"\nInizio interrogazione per {len(dataset)} domande...")
 
-    # Processamento (senza batch per gestire dinamicamente contesti di lunghezze molto diverse)
+    # Processamento di ogni domanda nel dataset
     for item in tqdm(dataset, desc="Generazione risposte"):
         id_domanda = item['id']
         contesto = item['context']
@@ -114,13 +117,13 @@ def main():
 
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=50, # Limite basso, le risposte di SQuAD sono solitamente brevi
-                do_sample=False,   # do_sample=False rende l'output deterministico 
+                max_new_tokens=50, # Limite basso per evitare risposte troppo lunghe
+                do_sample=False,   
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
             )
 
-            # Estrazione del solo testo generato (escludendo il prompt)
+            # Estrazione del solo testo generato
             prompt_len = inputs["input_ids"].shape[1]
             generated_tokens = outputs[0][prompt_len:]
             predicted_answer = tokenizer.decode(
