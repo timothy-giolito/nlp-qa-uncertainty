@@ -3,27 +3,25 @@ import csv
 from pathlib import Path
 from dotenv import load_dotenv
 import torch
+import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from datasets import load_dataset
 
 # 1. Caricamento ambiente e percorsi
 load_dotenv()
-# caricamento del token di accesso a Hugging Face dal file .env 
 token = os.environ.get("HF_TOKEN")
 
 FOLDER_OUTPUT = Path("output_squad")
 FILE_OUTPUT = FOLDER_OUTPUT / "squad_predictions.csv"
 FOLDER_OUTPUT.mkdir(parents=True, exist_ok=True)
 
-# Definizione del modello da utilizzare
 MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct" 
 
 # 2. Rilevamento Hardware e Configurazione Quantizzazione
 print("Rilevamento hardware in corso...")
 quantization_config = None
 
-# Rilevamento della GPU disponibile e configurazione della quantizzazione se necessario
 if torch.cuda.is_available():
     device = "cuda"
     print("-> Utilizzo GPU NVIDIA (CUDA)")
@@ -55,7 +53,6 @@ model_kwargs = {
 if quantization_config and device == "cuda":
     model_kwargs["quantization_config"] = quantization_config
 else:
-    # Gestione ottimizzata per Mac (MPS) o CPU
     model_kwargs["torch_dtype"] = (
         torch.bfloat16
         if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
@@ -90,24 +87,21 @@ def genera_prompt_qa(contesto, domanda):
 # 5. Ciclo principale di esecuzione
 def main():
     print("Caricamento del dataset SQuAD...")
-    # 100 esempi dal set di addestramento
     dataset = load_dataset("rajpurkar/squad", split="train").select(range(100))
 
-    # Inizializza il file CSV di output se non esiste
+    # Inizializza il file CSV di output aggiungendo la colonna Confidence
     if not os.path.exists(FILE_OUTPUT):
         with open(FILE_OUTPUT, "w", encoding="utf-8-sig", newline="") as f_out:
             writer = csv.writer(f_out)
-            writer.writerow(["ID", "Context", "Question", "True_Answer", "Predicted_Answer"])
+            writer.writerow(["ID", "Context", "Question", "True_Answer", "Predicted_Answer", "Confidence"])
 
     print(f"\nInizio interrogazione per {len(dataset)} domande...")
 
-    # Processamento di ogni domanda nel dataset
     for item in tqdm(dataset, desc="Generazione risposte"):
         id_domanda = item['id']
         contesto = item['context']
         domanda = item['question']
         
-        # SQuAD salva le risposte in una lista. Prendiamo la prima disponibile.
         risposta_reale = item['answers']['text'][0] if len(item['answers']['text']) > 0 else ""
 
         prompt_text = genera_prompt_qa(contesto, domanda)
@@ -115,25 +109,40 @@ def main():
         try:
             inputs = tokenizer(prompt_text, return_tensors="pt").to(model.device)
 
+            # Aggiunti output_scores e return_dict_in_generate per catturare le probabilità
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=50, # Limite basso per evitare risposte troppo lunghe
+                max_new_tokens=50,
                 do_sample=False,   
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
+                output_scores=True,
+                return_dict_in_generate=True,
             )
 
-            # Estrazione del solo testo generato
             prompt_len = inputs["input_ids"].shape[1]
-            generated_tokens = outputs[0][prompt_len:]
+            generated_tokens = outputs.sequences[0][prompt_len:]
             predicted_answer = tokenizer.decode(
                 generated_tokens, skip_special_tokens=True
             ).strip()
 
-            # Scrittura incrementale sul file CSV
+            # Calcolo della confidenza
+            token_probs = []
+            for i, logits in enumerate(outputs.scores):
+                # Trasforma i logits in probabilità
+                probs = F.softmax(logits[0], dim=-1)
+                # Recupera la probabilità del token effettivamente scelto dal modello
+                token_id = generated_tokens[i]
+                token_prob = probs[token_id].item()
+                token_probs.append(token_prob)
+            
+            # Media delle probabilità dei singoli token
+            confidence = sum(token_probs) / len(token_probs) if token_probs else 0.0
+
+            # Scrittura incrementale sul file CSV (incluso il valore di confidenza arrotondato a 4 decimali)
             with open(FILE_OUTPUT, "a", encoding="utf-8-sig", newline="") as f_out:
                 writer = csv.writer(f_out)
-                writer.writerow([id_domanda, contesto, domanda, risposta_reale, predicted_answer])
+                writer.writerow([id_domanda, contesto, domanda, risposta_reale, predicted_answer, round(confidence, 4)])
 
         except Exception as e:
             print(f"\n[Errore sulla domanda {id_domanda}]: {e}")

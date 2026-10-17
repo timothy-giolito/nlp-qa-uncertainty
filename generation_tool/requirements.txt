@@ -1,6 +1,8 @@
 pandas
+python-dotenv
 torch
 transformers
-bitsandbytes
-python-dotenv
+datasets
 tqdm
+accelerate
+bitsandbytes
