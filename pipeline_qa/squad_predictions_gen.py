@@ -87,7 +87,36 @@ def genera_prompt_qa(contesto, domanda):
 # 5. Ciclo principale di esecuzione
 def main():
     print("Caricamento del dataset SQuAD...")
-    dataset = load_dataset("rajpurkar/squad", split="train").select(range(100))
+    print("Caricamento e campionamento casuale del dataset SQuAD...")
+    dataset_completo = load_dataset("rajpurkar/squad", split="train")
+    
+    # Mescoliamo l'intero dataset per garantire la casualità (seed=42 per riproducibilità)
+    dataset_shuffled = dataset_completo.shuffle(seed=42)
+    
+    titoli_visti = set()
+    indici_scelti = []
+    
+    # Selezioniamo fino a 500 domande, assicurandoci di prendere 1 sola domanda per titolo
+    for i, item in enumerate(dataset_shuffled):
+        titolo = item['title']
+        if titolo not in titoli_visti:
+            titoli_visti.add(titolo)
+            indici_scelti.append(i)
+            
+        if len(indici_scelti) == 500:
+            break
+            
+    # Caso limite: se il dataset non avesse 500 titoli unici
+    # riempiamo i posti mancanti con domande casuali di titoli già visti
+    if len(indici_scelti) < 500:
+        for i, item in enumerate(dataset_shuffled):
+            if i not in indici_scelti:
+                indici_scelti.append(i)
+            if len(indici_scelti) == 500:
+                break
+
+    # Creiamo il dataset finale con i 500 indici selezionati
+    dataset = dataset_shuffled.select(indici_scelti)
 
     # Inizializza il file CSV di output aggiungendo la colonna Confidence
     if not os.path.exists(FILE_OUTPUT):
