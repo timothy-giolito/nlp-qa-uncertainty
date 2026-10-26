@@ -65,10 +65,12 @@ torch.set_grad_enabled(False)
 
 
 # 4. Costruzione del Prompt per QA
+# Sostituisci la tua funzione genera_prompt_qa con questa
 def genera_prompt_qa(contesto, domanda):
     system_prompt = (
         "Sei un assistente AI esperto in comprensione del testo. "
         "Rispondi alla domanda che ti viene posta basandoti ESCLUSIVAMENTE sul contesto fornito. "
+        "Se il contesto non contiene le informazioni necessarie per rispondere, asteniti dal rispondere e scrivi solo 'NESSUNA RISPOSTA'. "
         "Sii molto conciso e diretto, fornendo solo la risposta esatta senza introduzioni o spiegazioni aggiuntive."
     )
 
@@ -86,27 +88,30 @@ def genera_prompt_qa(contesto, domanda):
 
 # 5. Ciclo principale di esecuzione
 def main():
-    print("Caricamento del dataset SQuAD...")
-    print("Caricamento e campionamento casuale del dataset SQuAD...")
-    dataset_completo = load_dataset("rajpurkar/squad", split="train")
-    
-    # Mescoliamo l'intero dataset per garantire la casualità (seed=42 per riproducibilità)
-    dataset_shuffled = dataset_completo.shuffle(seed=42)
-    
+
+    print("Caricamento del dataset SQuAD 2.0...")
+
+    # 1. Utilizzo di un nuovo dataset
+    dataset_completo = load_dataset("rajpurkar/squad_v2", split="train")
+        
+    # 2. Filtra solo le domande unanswerable (lista answers.text vuota)
+    dataset_unanswerable = dataset_completo.filter(lambda x: len(x['answers']['text']) == 0)
+        
+    dataset_shuffled = dataset_unanswerable.shuffle(seed=42)
+        
     titoli_visti = set()
     indici_scelti = []
-    
-    # Selezioniamo fino a 500 domande, assicurandoci di prendere 1 sola domanda per titolo
+        
     for i, item in enumerate(dataset_shuffled):
         titolo = item['title']
         if titolo not in titoli_visti:
             titoli_visti.add(titolo)
             indici_scelti.append(i)
-            
+                
         if len(indici_scelti) == 500:
             break
-            
-    # Caso limite: se il dataset non avesse 500 titoli unici
+
+    # Caso limite: se il dataset non ha 500 titoli unici, 
     # riempiamo i posti mancanti con domande casuali di titoli già visti
     if len(indici_scelti) < 500:
         for i, item in enumerate(dataset_shuffled):
@@ -114,7 +119,7 @@ def main():
                 indici_scelti.append(i)
             if len(indici_scelti) == 500:
                 break
-
+            
     # Creiamo il dataset finale con i 500 indici selezionati
     dataset = dataset_shuffled.select(indici_scelti)
 
@@ -154,6 +159,10 @@ def main():
             predicted_answer = tokenizer.decode(
                 generated_tokens, skip_special_tokens=True
             ).strip()
+
+            # Confronto di "NESSUNA RISPOSTA" con la stringa vuota in modo da avere EM e F1-Score != 0
+            if "NESSUNA RISPOSTA" in predicted_answer.upper():
+                predicted_answer = ""
 
             # Calcolo della confidenza
             token_probs = []
