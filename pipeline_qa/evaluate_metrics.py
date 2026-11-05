@@ -59,7 +59,8 @@ def evaluate_metrics(df, col_generated="Predicted_Answer", col_reference="True_A
     return em_percentage, f1_average, em_scores, f1_scores
 
 if __name__ == "__main__":
-    percorso_csv = "output_squad/squad_predictions.csv"
+    # 1. Aggiornato per puntare al nuovo modello
+    percorso_csv = "output_squad/squad_predictions_1_5B.csv"
     
     try:
         df_risposte = pd.read_csv(percorso_csv)
@@ -70,8 +71,12 @@ if __name__ == "__main__":
             col_reference="True_Answer"
         )
         
-        df_risposte["Exact_Match_Score"] = em_list
+        # 2. Rinominiamo la colonna in 'exact_match' per compatibilità con lo script del grafico
+        df_risposte["exact_match"] = em_list
         df_risposte["F1_Score"] = f1_list
+        
+        # 3. SALVATAGGIO DEL FILE PRINCIPALE (Fondamentale per poter generare il grafico in seguito)
+        df_risposte.to_csv(percorso_csv, index=False)
         
         print(f"Totale domande analizzate: {len(df_risposte)}")
         print(f"Score Exact Match: {em_perc:.2f}%")
@@ -88,18 +93,19 @@ if __name__ == "__main__":
             ]
             print(f"\nTrovate {len(casi_critici_f1)} risposte errate con confidenza >= {soglia_confidenza} e F1 Score pari a 0")
             
-            percorso_critici_f1 = "output_squad/casi_critici_f1_alta_confidenza.csv"
+            # 4. Nomi aggiornati per non sovrascrivere l'analisi del modello 7B
+            percorso_critici_f1 = "output_squad/casi_critici_1_5B_f1_alta_confidenza.csv"
             casi_critici_f1.to_csv(percorso_critici_f1, index=False)
             print(f"Casi critici (F1=0) salvati con successo in: '{percorso_critici_f1}'")
             
             # Manteniamo anche l'estrazione basata su Exact Match per confronto
             casi_critici_em = df_risposte[
                 (df_risposte["Confidence"] >= soglia_confidenza) & 
-                (df_risposte["Exact_Match_Score"] == 0)
+                (df_risposte["exact_match"] == 0) # Aggiornato con il nuovo nome
             ]
             print(f"\nTrovate {len(casi_critici_em)} risposte errate con confidenza >= {soglia_confidenza} e Exact Match pari a 0")
             
-            percorso_critici_em = "output_squad/casi_critici_em_alta_confidenza.csv"
+            percorso_critici_em = "output_squad/casi_critici_1_5B_em_alta_confidenza.csv"
             casi_critici_em.to_csv(percorso_critici_em, index=False)
             print(f"Casi critici (EM=0) salvati con successo in: '{percorso_critici_em}'")
             

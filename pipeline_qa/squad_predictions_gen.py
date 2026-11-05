@@ -13,10 +13,10 @@ load_dotenv()
 token = os.environ.get("HF_TOKEN")
 
 FOLDER_OUTPUT = Path("output_squad")
-FILE_OUTPUT = FOLDER_OUTPUT / "squad_predictions.csv"
+FILE_OUTPUT = FOLDER_OUTPUT / "squad_predictions_1_5B.csv"
 FOLDER_OUTPUT.mkdir(parents=True, exist_ok=True)
 
-MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct" 
+MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
 
 # 2. Rilevamento Hardware e Configurazione Quantizzazione
 print("Rilevamento hardware in corso...")
@@ -65,7 +65,6 @@ torch.set_grad_enabled(False)
 
 
 # 4. Costruzione del Prompt per QA
-# Sostituisci la tua funzione genera_prompt_qa con questa
 def genera_prompt_qa(contesto, domanda):
     system_prompt = (
         "Sei un assistente AI esperto in comprensione del testo. "
