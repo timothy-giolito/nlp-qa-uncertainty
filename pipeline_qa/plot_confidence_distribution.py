@@ -2,56 +2,36 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Caricamento dei dati dai file generati nel progetto
-# Assicurati che i nomi dei file CSV corrispondano a quelli reali nel tuo progetto
-percorso_modello_1 = "pipeline_qa/output_squad/squad_predictions.csv"
-percorso_modello_2 = "pipeline_qa/output_squad/squad_predictions_1_5B.csv"
+def plot_distribuzione_confidenza(file_modello1, file_modello2, nome_modello1, nome_modello2, titolo_contesto, file_output):
+    # Caricamento dei dati
+    df1 = pd.read_csv(file_modello1)
+    df2 = pd.read_csv(file_modello2)
 
-df_modello_1 = pd.read_csv(percorso_modello_1)
-df_modello_2 = pd.read_csv(percorso_modello_2)
+    # --- FIX: Uniformiamo il nome della colonna per la compatibilità con i file vecchi ---
+    if 'Exact_Match_Score' in df1.columns:
+        df1.rename(columns={'Exact_Match_Score': 'exact_match'}, inplace=True)
+    if 'Exact_Match_Score' in df2.columns:
+        df2.rename(columns={'Exact_Match_Score': 'exact_match'}, inplace=True)
+    # -----------------------------------------------------------------------------------
 
-def plot_distribuzione_confidenza(df1, df2, nome_modello1="Modello 1", nome_modello2="Modello 2"):
-    # Impostazione della figura con due subplot affiancati
+    # Impostazione della figura
     fig, axes = plt.subplots(1, 2, figsize=(15, 6), sharey=True)
     
-    # Palette cromatica per distinguere a colpo d'occhio il match
-    # Supporta valori booleani (True/False) e numerici (1/0 o 1.0/0.0)[cite: 2]
+    # Palette per distinguere Exact Match
     palette = {True: '#2ecc71', False: '#e74c3c', 1: '#2ecc71', 0: '#e74c3c', 1.0: '#2ecc71', 0.0: '#e74c3c'}
     
-    # Plot per il Modello 1
-    sns.histplot(
-        data=df1, 
-        x='confidence', 
-        hue='exact_match', 
-        palette=palette, 
-        bins=25, 
-        kde=True,          # Aggiunge la curva di densità kernel[cite: 2]
-        ax=axes[0], 
-        stat="density",    # Normalizza l'istogramma (densità invece di conteggio)[cite: 2]
-        common_norm=False, # Calcola la densità separatamente per EM=1 ed EM=0[cite: 2]
-        alpha=0.6          # Trasparenza per visualizzare le sovrapposizioni[cite: 2]
-    )
-    axes[0].set_title(f'Distribuzione Confidenza\n{nome_modello1}')
+    # Plot Modello 1 (7B)
+    sns.histplot(data=df1, x='Confidence', hue='exact_match', palette=palette, bins=25, kde=True, ax=axes[0], stat="density", common_norm=False, alpha=0.6)
+    axes[0].set_title(f'{nome_modello1}\n({titolo_contesto})')
     axes[0].set_xlabel('Livello di Confidenza')
     axes[0].set_ylabel('Densità')
     
-    # Plot per il Modello 2
-    sns.histplot(
-        data=df2, 
-        x='confidence', 
-        hue='exact_match', 
-        palette=palette, 
-        bins=25, 
-        kde=True, 
-        ax=axes[1], 
-        stat="density", 
-        common_norm=False,
-        alpha=0.6
-    )
-    axes[1].set_title(f'Distribuzione Confidenza\n{nome_modello2}')
+    # Plot Modello 2 (1.5B)
+    sns.histplot(data=df2, x='Confidence', hue='exact_match', palette=palette, bins=25, kde=True, ax=axes[1], stat="density", common_norm=False, alpha=0.6)
+    axes[1].set_title(f'{nome_modello2}\n({titolo_contesto})')
     axes[1].set_xlabel('Livello di Confidenza')
     
-    # Personalizzazione delle legende
+    # Personalizzazione legenda
     labels = ['Sbagliata (EM=0)', 'Corretta (EM=1)']
     for ax in axes:
         legend = ax.get_legend()
@@ -59,18 +39,28 @@ def plot_distribuzione_confidenza(df1, df2, nome_modello1="Modello 1", nome_mode
             for t, l in zip(legend.texts, labels):
                 t.set_text(l)
                 
-    # Ottimizzazione degli spazi
     plt.tight_layout()
-    
-    # Salvataggio dell'immagine (sostituisce plt.show() per generare direttamente il file)[cite: 2]
-    percorso_salvataggio = "pipeline_qa/output_squad/istogramma_confidenza_confronto.png"
-    plt.savefig(percorso_salvataggio, dpi=300, bbox_inches='tight')
-    print(f"Grafico generato e salvato con successo in: {percorso_salvataggio}")
+    plt.savefig(file_output, dpi=300, bbox_inches='tight')
+    plt.close() 
+    print(f"Grafico salvato con successo: {file_output}")
 
-# Esecuzione del plot 
-plot_distribuzione_confidenza(
-    df1=df_modello_1, 
-    df2=df_modello_2, 
-    nome_modello1="Qwen 2.5 7B Instruct", 
-    nome_modello2="Qwen2.5-1.5B-Instruct"
-)
+if __name__ == "__main__":
+    # 1. Confronto sulle Domande POSSIBILI
+    plot_distribuzione_confidenza(
+        file_modello1="output_squad/squad_predictions_7B_possibili.csv",
+        file_modello2="output_squad/squad_predictions_1_5B_possibili.csv",
+        nome_modello1="Qwen 2.5 7B Instruct",
+        nome_modello2="Qwen2.5-1.5B-Instruct",
+        titolo_contesto="Domande Possibili",
+        file_output="output_squad/istogramma_confidenza_possibili.png"
+    )
+
+    # 2. Confronto sulle Domande IMPOSSIBILI
+    plot_distribuzione_confidenza(
+        file_modello1="output_squad/squad_predictions_7B_impossibili.csv",
+        file_modello2="output_squad/squad_predictions_1_5B_impossibili.csv",
+        nome_modello1="Qwen 2.5 7B Instruct",
+        nome_modello2="Qwen2.5-1.5B-Instruct",
+        titolo_contesto="Domande Impossibili",
+        file_output="output_squad/istogramma_confidenza_impossibili.png"
+    )
