@@ -1,0 +1,3 @@
+condition,n_7B,n_1_5B,common_ids,same_ids
+possibili,500,500,4,False
+impossibili,500,500,500,True

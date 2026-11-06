@@ -1,3 +1,5 @@
+from pathlib import Path
+from shutil import copy2
 import pandas as pd
 import string
 import re
@@ -58,59 +60,36 @@ def evaluate_metrics(df, col_generated="Predicted_Answer", col_reference="True_A
     
     return em_percentage, f1_average, em_scores, f1_scores
 
-if __name__ == "__main__":
-    # 1. Aggiornato per puntare al nuovo modello
-    percorso_csv = "output_squad/squad_predictions_1_5B.csv"
-    
-    try:
+def main():
+    cartella_output = Path(__file__).resolve().parent / "output_squad"
+    nomi_file = [
+        "squad_predictions_7B_possibili.csv",
+        "squad_predictions_7B_impossibili.csv",
+        "squad_predictions_1_5B_possibili.csv",
+        "squad_predictions_1_5B_impossibili.csv",
+    ]
+    soglia_confidenza = 0.85
+
+    # Controlla TUTTI i file prima di modificare qualsiasi CSV.
+    dati_validati = []
+    for nome_file in nomi_file:
+        percorso_csv = cartella_output / nome_file
+        if not percorso_csv.is_file():
+            raise FileNotFoundError(f"File richiesto non trovato: {percorso_csv}")
         df_risposte = pd.read_csv(percorso_csv)
-        
-        em_perc, f1_avg, em_list, f1_list = evaluate_metrics(
-            df_risposte, 
-            col_generated="Predicted_Answer", 
-            col_reference="True_Answer"
-        )
-        
-        # 2. Rinominiamo la colonna in 'exact_match' per compatibilità con lo script del grafico
-        df_risposte["exact_match"] = em_list
-        df_risposte["F1_Score"] = f1_list
-        
-        # 3. SALVATAGGIO DEL FILE PRINCIPALE (Fondamentale per poter generare il grafico in seguito)
-        df_risposte.to_csv(percorso_csv, index=False)
-        
-        print(f"Totale domande analizzate: {len(df_risposte)}")
-        print(f"Score Exact Match: {em_perc:.2f}%")
-        print(f"Score F1 Medio: {f1_avg:.2f}%")
-        
-        # --- ANALISI INCERTEZZA ---
-        soglia_confidenza = 0.85
-        
-        if "Confidence" in df_risposte.columns:
-            # Estrazione casi critici basata su F1 Score
-            casi_critici_f1 = df_risposte[
-                (df_risposte["Confidence"] >= soglia_confidenza) & 
-                (df_risposte["F1_Score"] == 0.0) 
-            ]
-            print(f"\nTrovate {len(casi_critici_f1)} risposte errate con confidenza >= {soglia_confidenza} e F1 Score pari a 0")
-            
-            # 4. Nomi aggiornati per non sovrascrivere l'analisi del modello 7B
-            percorso_critici_f1 = "output_squad/casi_critici_1_5B_f1_alta_confidenza.csv"
-            casi_critici_f1.to_csv(percorso_critici_f1, index=False)
-            print(f"Casi critici (F1=0) salvati con successo in: '{percorso_critici_f1}'")
-            
-            # Manteniamo anche l'estrazione basata su Exact Match per confronto
-            casi_critici_em = df_risposte[
-                (df_risposte["Confidence"] >= soglia_confidenza) & 
-                (df_risposte["exact_match"] == 0) # Aggiornato con il nuovo nome
-            ]
-            print(f"\nTrovate {len(casi_critici_em)} risposte errate con confidenza >= {soglia_confidenza} e Exact Match pari a 0")
-            
-            percorso_critici_em = "output_squad/casi_critici_1_5B_em_alta_confidenza.csv"
-            casi_critici_em.to_csv(percorso_critici_em, index=False)
-            print(f"Casi critici (EM=0) salvati con successo in: '{percorso_critici_em}'")
-            
-        else:
-            print("\nAttenzione: La colonna 'Confidence' non è presente nel file CSV. Assicurati di aver eseguito il nuovo script di generazione.")
-            
-    except FileNotFoundError:
-        print(f"Errore: Il file {percorso_csv} non è stato trovato.")
+        richieste = {"ID", "Predicted_Answer", "True_Answer"}
+        if not richieste.issubset(df_risposte.columns):
+            raise ValueError(f"{nome_file}: colonne mancanti {richieste - set(df_risposte.columns)}")
+        if df_risposte.ID.isna().any() or df_risposte.ID.astype(str).str.strip().eq("").any():
+            raise ValueError(f"{nome_file}: sono presenti ID mancanti")
+        numero_originale = len(df_risposte)
+        df_risposte = df_risposte.drop_duplicates().copy()
+        if df_risposte.ID.duplicated().any():
+            raise ValueError(f"{nome_file}: stesso ID con dati differenti; controllare manualmente")
+        if len(df_risposte) != 500:
+            raise ValueError(f"{nome_file}: trovate {len(df_risposte)} domande uniche, attese 500. Nessun file modificato.")
+        if "Confidence" in df_risposte:
+            df_risposte["Confidence"] = pd.to_numeric(df_risposte["Confidence"], errors="raise")
+            if not df_risposte.Confidence.between(0, 1).all():
+                raise ValueError(f"{nome_file}: valori di confidenza mancanti o non validi")
+        dati_validati.append((percorso_csv, df_risposte, numero_originale - len(df_risposte)))
