@@ -13,10 +13,10 @@ load_dotenv()
 token = os.environ.get("HF_TOKEN")
 
 FOLDER_OUTPUT = Path("output_squad")
-FILE_OUTPUT = FOLDER_OUTPUT / "squad_predictions_1_5B.csv"
+FILE_OUTPUT = FOLDER_OUTPUT / "squad_predictions_llama_3_2_1B_possibili.csv"
 FOLDER_OUTPUT.mkdir(parents=True, exist_ok=True)
 
-MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
+MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct"
 
 # 2. Rilevamento Hardware e Configurazione Quantizzazione
 print("Rilevamento hardware in corso...")
@@ -92,9 +92,14 @@ def main():
 
     # 1. Utilizzo di un nuovo dataset
     dataset_completo = load_dataset("rajpurkar/squad_v2", split="train")
-        
+
+    # ---- GENERAZIONE RISPOSTE A DOMANDE IMPOSSIBILI ----
     # 2. Filtra solo le domande unanswerable (lista answers.text vuota)
-    dataset_unanswerable = dataset_completo.filter(lambda x: len(x['answers']['text']) == 0)
+    #dataset_unanswerable = dataset_completo.filter(lambda x: len(x['answers']['text']) == 0)
+
+    # ---- GENERAZIONE RIPOSTE A DOMANDE POSSIBILI ----
+    # 2.1 Filtra solo le domande answerable (domande possibili a cui rispondere)
+    dataset_unanswerable = dataset_completo.filter(lambda x: len(x["answers"]["text"]) > 0)
         
     dataset_shuffled = dataset_unanswerable.shuffle(seed=42)
         

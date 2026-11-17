@@ -63,10 +63,11 @@ def evaluate_metrics(df, col_generated="Predicted_Answer", col_reference="True_A
 def main():
     cartella_output = Path(__file__).resolve().parent / "output_squad"
     nomi_file = [
-        "squad_predictions_7B_possibili.csv",
-        "squad_predictions_7B_impossibili.csv",
-        "squad_predictions_1_5B_possibili.csv",
-        "squad_predictions_1_5B_impossibili.csv",
+       # "squad_predictions_7B_possibili.csv",
+       # "squad_predictions_7B_impossibili.csv",
+       # "squad_predictions_1_5B_possibili.csv",
+       # "squad_predictions_1_5B_impossibili.csv",
+       "squad_predictions_llama_3_2_1B_possibili.csv"
     ]
     soglia_confidenza = 0.85
 

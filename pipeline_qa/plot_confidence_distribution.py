@@ -9,7 +9,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import PercentFormatter
+from matplotlib.patches import Patch
 
 def load_data(path, keep_duplicates=False):
     df = pd.read_csv(path)
@@ -47,7 +47,8 @@ def plot_distribuzione_confidenza(file_modello1, file_modello2, nome_modello1,
     dati = [load_data(p)[0] for p in (file_modello1, file_modello2)]
     intervalli = np.linspace(0, 1, 21)
     colori = ["#D55E00", "#0072B2"]
-    etichette = ["Non esatta (EM=0)", "Esatta (EM=1)"]
+    arancio, blu = [np.array(matplotlib.colors.to_rgb(c)) for c in colori]
+    etichette = ["Risposta non esatta (EM=0)", "Risposta esatta (EM=1)"]
     plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 11,
                          "axes.spines.top": False, "axes.spines.right": False,
                          "svg.fonttype": "none"})
@@ -56,22 +57,35 @@ def plot_distribuzione_confidenza(file_modello1, file_modello2, nome_modello1,
     for ax, df, nome in zip(axes, dati, (nome_modello1, nome_modello2)):
         valori = [df.loc[df.exact_match == c, "Confidence"].to_numpy() for c in (0, 1)]
         # Percentuali sul totale del modello: le barre impilate sommano al 100%.
-        ax.hist(valori, bins=intervalli,
-                weights=[np.full(len(v), 100/len(df)) for v in valori],
-                stacked=True, color=colori, edgecolor="white", linewidth=.5,
-                label=[f"{e}: {len(v)}" for e, v in zip(etichette, valori)])
+        conteggi = [np.histogram(v, bins=intervalli)[0] for v in valori]
+        for i, (errate, esatte) in enumerate(zip(*conteggi)):
+            totale = errate + esatte
+            if totale == 0:
+                continue
+            quota = errate / totale
+            # La sfumatura è centrata sul confine reale tra le due categorie.
+            ampiezza = min(0.15, quota, 1 - quota)
+            y = (np.arange(256) + 0.5) / 256
+            peso_blu = (np.clip((y - quota + ampiezza) / (2 * ampiezza), 0, 1)
+                        if ampiezza else np.full_like(y, float(errate == 0)))
+            rgb = (1 - peso_blu[:, None]) * arancio + peso_blu[:, None] * blu
+            ax.imshow(rgb[:, None, :], origin="lower", aspect="auto",
+                      interpolation="nearest", zorder=2,
+                      extent=(intervalli[i] + 0.001, intervalli[i+1] - 0.001,
+                              0, 100 * totale / len(df)))
+        legenda = [Patch(facecolor=c, label=f"{e}: {len(v)}")
+                   for c, e, v in zip(colori, etichette, valori)]
         em = f"{df.exact_match.mean():.2%}".replace(".", ",")
         ax.set_title(f"{nome}\n{len(df)} domande · Exact Match: {em}", fontsize=12)
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 100)
         ax.set_xticks(np.linspace(0, 1, 6))
-        ax.yaxis.set_major_formatter(PercentFormatter(100))
+        ax.set_yticks([])
         ax.set_xlabel("Confidenza media dei token")
         ax.grid(axis="y", alpha=.2)
         ax.set_axisbelow(True)
-        ax.legend(loc="upper left", frameon=False, fontsize=10)
+        ax.legend(handles=legenda, loc="upper left", frameon=False, fontsize=10)
         print(f"{titolo_contesto} — {nome}: N={len(df)}, EM={em}")
-    axes[0].set_ylabel("Percentuale delle risposte")
     fig.tight_layout(rect=(0, 0, 1, .94))
     output = Path(file_output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -88,9 +102,9 @@ def main():
     output = args.output_dir or args.input_dir/"grafici_relazione"
     for condizione in ("possibili", "impossibili"):
         plot_distribuzione_confidenza(
-            args.input_dir/f"squad_predictions_7B_{condizione}.csv",
             args.input_dir/f"squad_predictions_1_5B_{condizione}.csv",
-            "Qwen 2.5 7B Instruct", "Qwen 2.5 1.5B Instruct",
+            args.input_dir/f"squad_predictions_7B_{condizione}.csv",
+            "Qwen 2.5 1.5B Instruct", "Qwen 2.5 7B Instruct",
             f"Domande {condizione}", output/f"istogramma_confidenza_{condizione}.png")
     print(f"Istogrammi PNG e SVG salvati in: {output.resolve()}")
 
