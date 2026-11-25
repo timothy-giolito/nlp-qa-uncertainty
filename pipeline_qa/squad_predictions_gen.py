@@ -13,10 +13,10 @@ load_dotenv()
 token = os.environ.get("HF_TOKEN")
 
 FOLDER_OUTPUT = Path("output_squad")
-FILE_OUTPUT = FOLDER_OUTPUT / "squad_predictions_llama_3_2_1B_possibili.csv"
+FILE_OUTPUT = FOLDER_OUTPUT / "squad_predictions_llama_3_1_8B_impossibili.csv"
 FOLDER_OUTPUT.mkdir(parents=True, exist_ok=True)
 
-MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct"
+MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
 
 # 2. Rilevamento Hardware e Configurazione Quantizzazione
 print("Rilevamento hardware in corso...")
@@ -90,16 +90,16 @@ def main():
 
     print("Caricamento del dataset SQuAD 2.0...")
 
-    # 1. Utilizzo di un nuovo dataset
+    # 1. Utilizzo dataset
     dataset_completo = load_dataset("rajpurkar/squad_v2", split="train")
 
     # ---- GENERAZIONE RISPOSTE A DOMANDE IMPOSSIBILI ----
     # 2. Filtra solo le domande unanswerable (lista answers.text vuota)
-    #dataset_unanswerable = dataset_completo.filter(lambda x: len(x['answers']['text']) == 0)
+    dataset_unanswerable = dataset_completo.filter(lambda x: len(x['answers']['text']) == 0)
 
     # ---- GENERAZIONE RIPOSTE A DOMANDE POSSIBILI ----
     # 2.1 Filtra solo le domande answerable (domande possibili a cui rispondere)
-    dataset_unanswerable = dataset_completo.filter(lambda x: len(x["answers"]["text"]) > 0)
+    #dataset_unanswerable = dataset_completo.filter(lambda x: len(x["answers"]["text"]) > 0)
         
     dataset_shuffled = dataset_unanswerable.shuffle(seed=42)
         
@@ -124,7 +124,7 @@ def main():
             if len(indici_scelti) == 500:
                 break
             
-    # Creiamo il dataset finale con i 500 indici selezionati
+    # Creazione dataset finale con i 500 indici selezionati
     dataset = dataset_shuffled.select(indici_scelti)
 
     # Inizializza il file CSV di output aggiungendo la colonna Confidence

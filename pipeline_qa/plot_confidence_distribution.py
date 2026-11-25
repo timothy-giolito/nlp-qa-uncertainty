@@ -102,8 +102,8 @@ def main():
     output = args.output_dir or args.input_dir/"grafici_relazione"
     for condizione in ("possibili", "impossibili"):
         plot_distribuzione_confidenza(
-            args.input_dir/f"squad_predictions_1_5B_{condizione}.csv",
-            args.input_dir/f"squad_predictions_7B_{condizione}.csv",
+            args.input_dir/f"squad_predictions_qwen_1_5B_{condizione}.csv",
+            args.input_dir/f"squad_predictions_qwen_7B_{condizione}.csv",
             "Qwen 2.5 1.5B Instruct", "Qwen 2.5 7B Instruct",
             f"Domande {condizione}", output/f"istogramma_confidenza_{condizione}.png")
     print(f"Istogrammi PNG e SVG salvati in: {output.resolve()}")

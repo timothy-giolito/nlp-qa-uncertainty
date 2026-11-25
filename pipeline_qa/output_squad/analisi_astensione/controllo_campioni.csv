@@ -1,3 +1,13 @@
-condition,n_7B,n_1_5B,common_ids,same_ids
-possibili,500,500,4,False
-impossibili,500,500,500,True
+model_a,model_b,condition,n_a,n_b,common_ids,same_ids,n_7B,n_1_5B
+7B,1_5B,possibili,500,500,4,False,500.0,500.0
+7B,1_5B,impossibili,500,500,500,True,500.0,500.0
+7B,llama_3_1_8B,possibili,500,500,4,False,,
+7B,llama_3_1_8B,impossibili,500,500,500,True,,
+7B,llama_3_2_1B,possibili,500,500,4,False,,
+7B,llama_3_2_1B,impossibili,500,500,500,True,,
+1_5B,llama_3_1_8B,possibili,500,500,500,True,,
+1_5B,llama_3_1_8B,impossibili,500,500,500,True,,
+1_5B,llama_3_2_1B,possibili,500,500,500,True,,
+1_5B,llama_3_2_1B,impossibili,500,500,500,True,,
+llama_3_1_8B,llama_3_2_1B,possibili,500,500,500,True,,
+llama_3_1_8B,llama_3_2_1B,impossibili,500,500,500,True,,

@@ -63,13 +63,17 @@ def evaluate_metrics(df, col_generated="Predicted_Answer", col_reference="True_A
 def main():
     cartella_output = Path(__file__).resolve().parent / "output_squad"
     nomi_file = [
-       # "squad_predictions_7B_possibili.csv",
-       # "squad_predictions_7B_impossibili.csv",
-       # "squad_predictions_1_5B_possibili.csv",
-       # "squad_predictions_1_5B_impossibili.csv",
-       "squad_predictions_llama_3_2_1B_possibili.csv"
+       "squad_predictions_7B_possibili.csv",
+       "squad_predictions_7B_impossibili.csv",
+       "squad_predictions_1_5B_possibili.csv",
+       "squad_predictions_1_5B_impossibili.csv",
+       "squad_predictions_llama_3_2_1B_possibili.csv",
+       "squad_predictions_llama_3_2_1B_impossibili.csv",
+       "squad_predictions_llama_3_1_8B_possibili.csv",
+       "squad_predictions_llama_3_1_8B_impossibili.csv"
     ]
     soglia_confidenza = 0.85
+    print(f"Avvio valutazione di {len(nomi_file)} file...", flush=True)
 
     # Controlla TUTTI i file prima di modificare qualsiasi CSV.
     dati_validati = []
@@ -94,3 +98,37 @@ def main():
             if not df_risposte.Confidence.between(0, 1).all():
                 raise ValueError(f"{nome_file}: valori di confidenza mancanti o non validi")
         dati_validati.append((percorso_csv, df_risposte, numero_originale - len(df_risposte)))
+
+    for percorso_csv, df_risposte, duplicati in dati_validati:
+        backup = percorso_csv.with_suffix(".csv.bak")
+        if not backup.exists():
+            copy2(percorso_csv, backup)
+
+        em, f1, em_list, f1_list = evaluate_metrics(df_risposte)
+        df_risposte["exact_match"] = em_list
+        df_risposte["F1_Score"] = f1_list
+        df_risposte.to_csv(percorso_csv, index=False)
+
+        print(f"\nFile: {percorso_csv.name}")
+        print(f"Domande valutate: {len(df_risposte)}")
+        print(f"Duplicati rimossi: {duplicati}")
+        print(f"Exact Match: {em:.2f}%")
+        print(f"F1-Score: {f1:.2f}%")
+
+        if "Confidence" not in df_risposte.columns:
+            print("Confidence assente: estrazione dei casi critici saltata.")
+            continue
+
+        suffisso = percorso_csv.stem.removeprefix("squad_predictions_")
+        alta_confidenza = df_risposte["Confidence"] >= soglia_confidenza
+        for metrica, colonna in [("em", "exact_match"), ("f1", "F1_Score")]:
+            casi_critici = df_risposte[alta_confidenza & (df_risposte[colonna] == 0)]
+            destinazione = cartella_output / f"casi_critici_{suffisso}_{metrica}_alta_confidenza.csv"
+            casi_critici.to_csv(destinazione, index=False)
+            print(f"Casi critici {metrica.upper()}: {len(casi_critici)} -> {destinazione.name}")
+
+    print("\nValutazione completata.")
+
+
+if __name__ == "__main__":
+    main()

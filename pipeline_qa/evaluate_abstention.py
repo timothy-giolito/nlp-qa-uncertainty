@@ -5,6 +5,7 @@ Esempio: python evaluate_abstention.py --thresholds 0.80 0.85 0.90 0.95 0.99
 """
 from pathlib import Path
 import argparse
+from itertools import combinations
 import warnings
 import numpy as np
 import pandas as pd
@@ -103,13 +104,20 @@ def main():
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--thresholds", nargs="+", type=float, default=[.80, .85, .90, .95, .99, 1.0])
     parser.add_argument("--export-threshold", type=float, help="Esporta anche le decisioni per questa soglia, senza dichiararla ottimale")
+    parser.add_argument(
+        "--models", nargs="+", default=["7B", "1_5B"],
+        help="Identificativi nei nomi CSV, ad esempio 7B 1_5B llama_3_1_8B llama_3_2_1B")
     args = parser.parse_args()
+    models = list(dict.fromkeys(args.models))
+    for model in models:
+        if not model or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for char in model):
+            parser.error("Gli identificativi dei modelli possono contenere lettere, numeri, _ e -")
     thresholds = sorted(set(args.thresholds))
     for value in thresholds + ([] if args.export_threshold is None else [args.export_threshold]):
         if not np.isfinite(value) or not 0 <= value <= 1:
             parser.error("Le soglie devono appartenere a [0,1]")
     datasets = {}
-    for model in ("7B", "1_5B"):
+    for model in models:
         frames = [load_predictions(args.input_dir/f"squad_predictions_{model}_{condition}.csv", answerable)
                   for condition, answerable in [("possibili", True), ("impossibili", False)]]
         combined = pd.concat(frames, ignore_index=True)
@@ -117,16 +125,23 @@ def main():
             raise ValueError(f"{model}: ID presenti sia tra le domande possibili sia tra le impossibili")
         datasets[model] = combined
     alignment = []
-    for answerable, condition in [(True, "possibili"), (False, "impossibili")]:
-        ids = [set(df.loc[df.answerable == answerable, "ID"]) for df in datasets.values()]
-        alignment.append(dict(condition=condition, n_7B=len(ids[0]), n_1_5B=len(ids[1]),
-                              common_ids=len(ids[0] & ids[1]), same_ids=ids[0] == ids[1]))
-        if ids[0] != ids[1]:
-            warnings.warn(f"{condition}: campioni diversi tra modelli ({len(ids[0]&ids[1])} ID comuni). "
-                          "Il confronto tra modelli non è controllato sullo stesso campione.", stacklevel=2)
+    for model_a, model_b in combinations(models, 2):
+        for answerable, condition in [(True, "possibili"), (False, "impossibili")]:
+            ids_a = set(datasets[model_a].loc[datasets[model_a].answerable == answerable, "ID"])
+            ids_b = set(datasets[model_b].loc[datasets[model_b].answerable == answerable, "ID"])
+            row = dict(model_a=model_a, model_b=model_b, condition=condition,
+                       n_a=len(ids_a), n_b=len(ids_b),
+                       common_ids=len(ids_a & ids_b), same_ids=ids_a == ids_b)
+            # Mantiene anche le colonne del precedente controllo Qwen.
+            if model_a == "7B" and model_b == "1_5B":
+                row.update(n_7B=len(ids_a), n_1_5B=len(ids_b))
+            alignment.append(row)
+            if ids_a != ids_b:
+                warnings.warn(f"{condition}, {model_a} / {model_b}: "
+                              f"campioni diversi ({len(ids_a & ids_b)} ID comuni).", stacklevel=2)
     output = args.output_dir or args.input_dir/"analisi_astensione"
     output.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(alignment).to_csv(output/"controllo_campioni.csv", index=False)
+    pd.DataFrame(alignment, columns=["model_a", "model_b", "condition", "n_a", "n_b", "common_ids", "same_ids", "n_7B", "n_1_5B"]).to_csv(output/"controllo_campioni.csv", index=False)
     for model, df in datasets.items():
         report = evaluate(df, thresholds)
         report.insert(0, "model", model)
